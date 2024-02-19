@@ -851,6 +851,37 @@ func TestToBaggage(t *testing.T) {
 	)
 }
 
+func TestSetSpanOnContext(t *testing.T) {
+	ctx := NewTestContext(ClientOptions{
+		EnableTracing:    true,
+		TracesSampleRate: 1,
+	})
+	transaction := StartTransaction(ctx, "op")
+
+	ctx = SetSpanOnContext(ctx, nil)
+	span := SpanFromContext(ctx)
+	if span != nil {
+		t.Errorf("SpanFromContext(ctx) = %v, want nil", span)
+	}
+
+	transaction2 := StartTransaction(ctx, "op2")
+	if transaction == nil {
+		t.Errorf("StartTransaction should return a new transaction")
+	}
+	if transaction == transaction2 {
+		t.Errorf("StartTransaction should return a new transaction")
+	}
+	if transaction2.parent != nil {
+		t.Errorf("Transaction should not have a parent")
+	}
+
+	ctx = SetSpanOnContext(ctx, transaction)
+	span = SpanFromContext(ctx)
+	if span != transaction {
+		t.Errorf("SpanFromContext(ctx) = %v, want %v", span, transaction)
+	}
+}
+
 func TestSpanSetContext(t *testing.T) {
 	ctx := NewTestContext(ClientOptions{
 		EnableTracing: true,

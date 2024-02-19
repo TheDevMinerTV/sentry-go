@@ -101,7 +101,9 @@ type TraceParentContext struct {
 // root span sends the span and all of its children, recursively, as a
 // transaction to Sentry.
 func StartSpan(ctx context.Context, operation string, options ...SpanOption) *Span {
-	parent, hasParent := ctx.Value(spanContextKey{}).(*Span)
+	parent := SpanFromContext(ctx)
+	hasParent := parent != nil
+
 	var span Span
 	span = Span{
 		// defaults
@@ -109,7 +111,7 @@ func StartSpan(ctx context.Context, operation string, options ...SpanOption) *Sp
 		StartTime: time.Now(),
 		Sampled:   SampledUndefined,
 
-		ctx:    context.WithValue(ctx, spanContextKey{}, &span),
+		ctx:    SetSpanOnContext(ctx, &span),
 		parent: parent,
 	}
 
@@ -919,16 +921,23 @@ type spanContextKey struct{}
 // TransactionFromContext returns the root span of the current transaction. It
 // returns nil if no transaction is tracked in the context.
 func TransactionFromContext(ctx context.Context) *Span {
-	if span, ok := ctx.Value(spanContextKey{}).(*Span); ok {
+	if span := SpanFromContext(ctx); span != nil {
 		return span.recorder.root()
 	}
+
 	return nil
+}
+
+// SetSpanOnCtext sets the given span on the context. This can also be used to
+// erase the span from the context by setting it to nil.
+func SetSpanOnContext(ctx context.Context, span *Span) context.Context {
+	return context.WithValue(ctx, spanContextKey{}, span)
 }
 
 // SpanFromContext returns the last span stored in the context, or nil if no span
 // is set on the context.
 func SpanFromContext(ctx context.Context) *Span {
-	if span, ok := ctx.Value(spanContextKey{}).(*Span); ok {
+	if span, ok := ctx.Value(spanContextKey{}).(*Span); ok && span != nil {
 		return span
 	}
 	return nil
@@ -937,8 +946,7 @@ func SpanFromContext(ctx context.Context) *Span {
 // StartTransaction will create a transaction (root span) if there's no existing
 // transaction in the context otherwise, it will return the existing transaction.
 func StartTransaction(ctx context.Context, name string, options ...SpanOption) *Span {
-	currentTransaction, exists := ctx.Value(spanContextKey{}).(*Span)
-	if exists {
+	if currentTransaction := SpanFromContext(ctx); currentTransaction != nil {
 		return currentTransaction
 	}
 
